@@ -1,0 +1,201 @@
+# peditagentd config. Copy to config.toml and edit; run peditagentd pointed
+# at it: `peditagentd /path/to/config.toml`.
+
+# Unix socket peditagentd listens on -- only actually used as-is when
+# replace_auth_sock is off, or when it falls back (see below). Otherwise
+# peditagentd binds at $SSH_AUTH_SOCK's own original path instead of here.
+listen = "~/.cache/pedit/agent.sock"
+
+# The real agent socket to proxy normal (non-pedit) requests to -- whatever
+# SSH_AUTH_SOCK pointed at before peditagentd (ssh-agent, 1Password, a
+# hardware token, gpg-agent). If left blank, peditagentd captures whatever
+# $SSH_AUTH_SOCK is set to at its own startup, which only works if you start
+# peditagentd BEFORE re-exporting SSH_AUTH_SOCK -- forgetting this step and
+# still having SSH_AUTH_SOCK point at the old agent is the most common setup
+# mistake (pedit's extension request just gets a plain, confusing failure
+# back from the real agent, since it doesn't understand it). Pin backing_agent
+# explicitly here once you know the real path to remove the ordering
+# dependency across restarts.
+backing_agent = ""
+
+# When backing_agent is blank, this decides what happens with the
+# $SSH_AUTH_SOCK captured at startup: instead of listening at `listen` and
+# requiring every shell to re-export SSH_AUTH_SOCK to it (easy to forget --
+# see above), peditagentd moves the real agent's socket aside to
+# "<original>.pedit-real" and binds its own socket AT the original path, so
+# nothing else ever needs to change. Restored automatically on SIGINT/SIGTERM.
+# Falls back to the old listen-path behavior (with a logged warning) if the
+# move fails, e.g. across filesystems.
+replace_auth_sock = true
+
+# Hard cap on incoming file size, and the ONLY size knob -- peditagentd
+# derives the wire frame limit from it. (A second hardcoded 256 MiB ceiling
+# used to exist, so a 485 MB transfer under a 5 GB setting died as
+# "write: broken pipe" with this value never consulted.)
+#
+# Two ceilings you cannot exceed no matter what you set here, both reported
+# at startup rather than failing mid-transfer:
+#   * the protocol's frame length is a uint32, so ~4 GiB is absolute;
+#   * pedit buffers whole files in RAM on BOTH ends, so a build caps out
+#     around 2 GiB (512 MiB on a 32-bit build). Budget roughly 2-3x the
+#     file size in free memory for a transfer.
+#
+# Over-limit fails in one of two ways on purpose: slightly over is refused
+# politely and audited as "oversized"; massively over is refused at the
+# frame header without allocating, so it surfaces as a client-side write
+# error that names this setting.
+max_size_bytes = 10485760
+
+# "exec": ask via an askpass-style command (contrib/askpass-notify-send.sh),
+#         then run the profile command locally. Needs a desktop session;
+#         fine for GUI profile commands that don't need a controlling
+#         terminal.
+# "socket": hand approval + execution to a `peditctl` you run yourself in a
+#         real terminal on this host. Use this if peditagentd runs headless
+#         (no desktop session) or your profile commands are terminal
+#         programs like vim, which a background daemon has no TTY for.
+# "serial": require a physical button press on an attached ESP32 running
+#         firmware/pedit-approver -- see that directory's README. Hardens
+#         approval against a remote attacker at the cost of needing a human
+#         physically at the board.
+approver = "exec"
+
+audit_log = "~/.cache/pedit/audit.log"
+
+# peditagentd backgrounds itself by default. Running in the foreground put
+# its output in whatever terminal launched it, where it then interleaved
+# with every later command in that shell -- including ssh sessions opened
+# from it. Backgrounded, that output goes to log_file instead.
+#
+# The launching process waits until the daemon is actually listening before
+# returning, so the socket is usable the moment the prompt comes back: it
+# MOVES the real agent socket aside and binds its own in that place, and a
+# prompt returning early would let the next command hit a half-swapped one.
+#
+# Set foreground = true (or pass -foreground) to keep it attached, which is
+# what you want under systemd or when debugging.
+foreground = false
+log_file = "~/.cache/pedit/agentd.log"
+pid_file = "~/.cache/pedit/agentd.pid"
+
+# --- pup / pdown: moving files in and out ------------------------------------
+#
+# `pedit` edits a remote file and hands it back. These two move files
+# instead, in either direction, through one shared directory here at home:
+#
+#   pup <file>                     remote -> this directory
+#   pdown [name]                   this directory -> remote
+#   pdown                          list what is staged here
+#
+# Both are BUILT IN. They are not profiles you can redefine -- defining
+# [profiles.pup] logs a warning and is ignored -- and neither of them runs
+# any command at all, so there is nothing here that can be turned into code
+# execution. Set transfer_dir = "" to switch both off entirely.
+#
+# Names arriving from the remote host are reduced to a single path element,
+# so "../../.ssh/authorized_keys" lands here as "authorized_keys". Symlinks
+# in this directory are never followed, which is what stops one being used
+# as a way to read a file elsewhere on this machine.
+transfer_dir = "~/pedit-transfers"
+
+# Confirmation is per-direction because the two are not the same decision.
+# An upload only ever adds a file to the directory above (it can never
+# overwrite -- pup refuses a name that is already taken, with no override).
+# A download hands a file from THIS machine to whoever asked for it, which
+# is the direction worth being fussy about.
+#
+# Turning confirm_up off is reasonable if you push files often and trust
+# everything that can reach your agent socket. Leaving confirm_down on is
+# strongly recommended: it is the one that can move your data outward.
+confirm_up = true
+confirm_down = true
+
+# Verbose step-by-step logging of each request (received -> temp file ->
+# asking the approver -> result) plus, for the exec approver, the askpass
+# command's captured stdout/stderr and a periodic "still waiting" heartbeat
+# while it runs. Turn this on first when something isn't behaving --
+# especially a request that just seems to hang, which is almost always the
+# askpass command itself failing/hanging silently (e.g. notify-send with no
+# session bus on a headless box) rather than pedit itself.
+debug = false
+
+# Serve pedit.sh itself back over the agent socket, so a remote host can
+# bootstrap with one pasted line instead of scp or an 11 MB clipboard dump:
+#   source /dev/stdin <<<"$(printf '...' | socat - UNIX-CONNECT:"$SSH_AUTH_SOCK" | tail -c +37)"
+# Generate the exact line with `peditbootstrap -arch amd64 -tool socat`.
+# Empty disables the feature entirely. Requests are audit-logged but NOT
+# gated behind the approver -- it returns pedit's own public shell script,
+# no secrets, and executes nothing on this end.
+bootstrap_script = ""
+
+[exec]
+command = "/home/claude/poptixland/pedit/contrib/askpass-notify-send.sh"
+# This bounds the APPROVAL PROMPT only -- not how long you may then spend in
+# the editor. Once approved, the profile command runs with no time limit of
+# its own; the only bound is the remote client's connection deadline
+# (pedithelper: 30 minutes, override with PEDIT_TIMEOUT_SECONDS on the
+# remote side). Debug logging says which phase it is waiting on, because
+# conflating the two once made a long edit look like it was about to be
+# killed at this timeout.
+timeout_seconds = 120
+
+[socket]
+control_socket = "~/.cache/pedit/control.sock"
+timeout_seconds = 300
+
+[serial]
+device = "/dev/serial/by-id/..."  # a stable by-id path, never a bare ttyACMn/ttyUSBn
+baud = 115200
+timeout_seconds = 120
+
+# Profiles are the only thing a remote pedit invocation can select -- never
+# an arbitrary command. {file} is replaced with the path of a private
+# (mode 700 dir, mode 600 file) temp copy of the incoming content; whatever
+# is on disk at that path when the command exits is what gets sent back.
+#
+# Default to a pager, not an editor, for anything named "view" -- the
+# content is untrusted input from a possibly-compromised host, and a pager
+# has far less attack surface than a real editor. If you do add an editor
+# profile, harden it against the content it's about to open, e.g. for vim:
+#   vim -u NONE --cmd 'set nomodeline' {file}
+#
+# $EDITOR/$PAGER-style profiles are guarded automatically (internal/profile):
+# if the referenced variable is unset wherever the command actually runs, it
+# fails with a clear "which is not set" error rather than POSIX sh's normal
+# behavior of treating the empty expansion as "no command word" and trying
+# to *execute* the quoted file path directly -- which, for content from an
+# untrusted host, is exactly the accidental code execution this tool exists
+# to prevent. Still worth actually setting $EDITOR/$PAGER in whichever
+# environment approves requests (peditagentd's own for "exec", peditctl's
+# for "socket") rather than relying on the guard as your only line of
+# defense -- it turns the failure mode safe, it doesn't make the profile work.
+[profiles.view]
+command = "$PAGER {file}"
+
+[profiles.edit]
+command = "$EDITOR {file}"
+
+# "open" hands the file to the desktop's own handler instead of running a
+# command against it. oneway = true changes the semantics substantially:
+#
+#   * peditagentd does NOT wait for the handler (xdg-open returns long before
+#     the viewer has even loaded) and does NOT read the file back;
+#   * nothing is written to the remote file -- it is left exactly as it was.
+#     The remote side is told StatusOpened rather than an empty success,
+#     because an empty success would truncate your file to zero bytes;
+#   * the temp copy is kept for retain_seconds (default 900) instead of being
+#     deleted when the command exits, since a detached viewer is still
+#     reading it. It is removed after that.
+#
+# SECURITY: the temp file is written mode 0600 with NO execute bit, which is
+# what stops a hostile host getting a .desktop file launched -- modern
+# desktops refuse to launch one that isn't executable. pedit does NOT
+# restrict which types get opened (a deliberate choice); the approval prompt
+# shows the type sniffed from the CONTENT via `file`, ignoring the
+# remote-supplied filename, so you can spot a mismatch before approving.
+# Residual risk: a handler that interprets what it opens (a browser running
+# JavaScript in an .html) still does so. Approve accordingly.
+[profiles.open]
+command = "xdg-open {file}"
+oneway = true
+retain_seconds = 900

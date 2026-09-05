@@ -1,0 +1,34 @@
+diff --git a/src/led/led.h b/src/led/led.h
+index 220ebd5..56e4128 100644
+--- a/src/led/led.h
++++ b/src/led/led.h
+@@ -50,10 +50,26 @@ enum {
+ // steady on
+ #define LED_ON_NO_BLINK     ((1000 << LED_ON_SHIFT) | (0 << LED_OFF_SHIFT))
+ 
++/* pedit local patch: the idle/standby modes are silenced so the LED is dark
++ * unless the device is actually doing something. Stock upstream values are
++ * kept in comments below -- restore them to get the original behaviour.
++ *
++ * Only the three "nothing is happening" states are changed. MODE_PROCESSING
++ * (an APDU is being handled) and MODE_BUTTON (waiting for your touch) are
++ * left alone, as are the explicit led_blink_n_times() success blinks, which
++ * bypass these modes entirely.
++ *
++ * On an always-plugged-in board the practical effect is killing the slow
++ * blue MODE_SUSPENDED flash, which is what a USB-suspended idle key shows.
++ */
+ enum  {
+-    MODE_NOT_MOUNTED = (MAX_BTNESS << LED_BTNESS_SHIFT) | (LED_COLOR_RED << LED_COLOR_SHIFT) | (500 << LED_ON_SHIFT) | (500 << LED_OFF_SHIFT),
+-    MODE_MOUNTED     = (MAX_BTNESS << LED_BTNESS_SHIFT) | (LED_COLOR_GREEN << LED_COLOR_SHIFT) | (500 << LED_ON_SHIFT) | (500 << LED_OFF_SHIFT),
+-    MODE_SUSPENDED   = (MAX_BTNESS << LED_BTNESS_SHIFT) | (LED_COLOR_BLUE << LED_COLOR_SHIFT) | (1000 << LED_ON_SHIFT) | (2000 << LED_OFF_SHIFT),
++    /* upstream: RED, 500ms on / 500ms off */
++    MODE_NOT_MOUNTED = 0,
++    /* upstream: GREEN, 500ms on / 500ms off */
++    MODE_MOUNTED     = 0,
++    /* upstream: BLUE, 1000ms on / 2000ms off */
++    MODE_SUSPENDED   = 0,
++
+     MODE_PROCESSING  = (MAX_BTNESS << LED_BTNESS_SHIFT) | (LED_COLOR_GREEN << LED_COLOR_SHIFT) | (50 << LED_ON_SHIFT) | (50 << LED_OFF_SHIFT),
+     MODE_BUTTON      = (MAX_BTNESS << LED_BTNESS_SHIFT) | (LED_COLOR_YELLOW << LED_COLOR_SHIFT) | (1000 << LED_ON_SHIFT) | (100 << LED_OFF_SHIFT),
+ 
