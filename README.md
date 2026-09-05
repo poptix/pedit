@@ -9,10 +9,7 @@ from a locked-down host. pedit puts a small daemon at the far end of it and
 uses a vendor-namespaced [RFC 9987](https://www.rfc-editor.org/rfc/rfc9987)
 extension, which every intermediate hop relays untouched.
   
-<video controls>
-  <source src="https://precious.net/9nBeqlBpMn6B.webm" type="video/webm">
-</video>  
-  
+[9nBeqlBpMn6B.webm](https://github.com/user-attachments/assets/ed07afb0-0672-4d6e-93f2-872037142c3c)
 
 ## Commands
 
