@@ -54,8 +54,13 @@ Generate the string for pasting on the remote host:
 ./peditbootstrap        # the string to paste, no arguments (add -readable to see it decoded)
 ```
 
+
+That's it. Login to the remote host with ssh -A (agent forwarding). Paste the string, now you have a 'pedit' 'pup' and 'pdown' command. Try them out. 
+
+
+
 ## Configuration  
-#### The defaults are probably fine for testing.    
+#### The defaults are fine for testing and general use. 
 ##  
 
 
