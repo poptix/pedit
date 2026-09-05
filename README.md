@@ -13,6 +13,11 @@ extension, which every intermediate hop relays untouched.
 
 ## Commands
 
+
+<img width="714" height="142" alt="image" src="https://github.com/user-attachments/assets/0886e3d2-5bc2-4ab0-9027-89d3e181877b" />
+
+
+
 Run on the remote host, after sourcing `pedit.sh`:
 
 | Command | What it does |
