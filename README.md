@@ -8,6 +8,11 @@ The forwarded agent socket is often the only channel that still reaches home
 from a locked-down host. pedit puts a small daemon at the far end of it and
 uses a vendor-namespaced [RFC 9987](https://www.rfc-editor.org/rfc/rfc9987)
 extension, which every intermediate hop relays untouched.
+  
+<video controls>
+  <source src="https://precious.net/9nBeqlBpMn6B.webm" type="video/webm">
+</video>  
+  
 
 ## Commands
 
@@ -46,14 +51,17 @@ path so nothing else needs to change. Set `backing_agent` explicitly to skip
 that ordering requirement. It backgrounds itself and returns once it is
 actually listening; `-foreground` for systemd or debugging.
 
-On the remote host, either paste `pedit.sh` in, or fetch it over the same
-agent socket:
+Generate the string for pasting on the remote host: 
 
 ```bash
-peditbootstrap        # the string to paste, no arguments (add -readable to see it decoded)
+./peditbootstrap        # the string to paste, no arguments (add -readable to see it decoded)
 ```
 
-## Configuration
+## Configuration  
+#### The defaults are probably fine for testing.    
+##  
+
+
 
 | Key | Default | |
 |---|---|---|
